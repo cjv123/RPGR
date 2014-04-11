@@ -162,6 +162,7 @@ xcopy /Y /Q "$(ProjectDir)..\..\..\external\libwebsockets\win32\lib\*.*" "$(OutD
     <ClCompile Include="..\Classes\binding-mruby\window-binding.cpp" />
     <ClCompile Include="..\Classes\binding-mruby\window.cpp" />
     <ClCompile Include="..\Classes\GamePad.cpp" />
+    <ClCompile Include="..\Classes\LanguageText.cpp" />
     <ClCompile Include="..\Classes\SceneGamelist.cpp" />
     <ClCompile Include="..\Classes\SceneMain.cpp" />
     <ClCompile Include="..\Classes\StateLoading.cpp" />
@@ -197,6 +198,7 @@ xcopy /Y /Q "$(ProjectDir)..\..\..\external\libwebsockets\win32\lib\*.*" "$(OutD
     <ClInclude Include="..\Classes\binding-mruby\viewport.h" />
     <ClInclude Include="..\Classes\binding-mruby\window.h" />
     <ClInclude Include="..\Classes\GamePad.h" />
+    <ClInclude Include="..\Classes\LanguageText.h" />
     <ClInclude Include="..\Classes\SceneGamelist.h" />
     <ClInclude Include="..\Classes\SceneMain.h" />
     <ClInclude Include="..\Classes\StateLoading.h" />

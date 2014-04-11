@@ -20,6 +20,9 @@ using namespace cocos2d;
 #include "../ThreadHandlerManager.h"
 #include "SceneGamelist.h"
 
+#include "SimpleAudioEngine.h"
+using namespace CocosDenshion;
+
 extern void etcBindingInit(mrb_state *mrb);
 extern void tableBindingInit(mrb_state *mrb);
 extern void fontBindingInit(mrb_state* mrb);
@@ -344,6 +347,11 @@ int RubyEngine::handler_method_exitEngine( int ptr1,void* ptr2 )
 	RubyEngine* engine = (RubyEngine*)ptr1;
 	engine->m_runRMXP = false;
 	engine->m_RMXPScripts.clear();
+
+	if (SimpleAudioEngine::sharedEngine()->isBackgroundMusicPlaying())
+	{
+		SimpleAudioEngine::sharedEngine()->stopBackgroundMusic();
+	}
 	
 	CCDirector::sharedDirector()->replaceScene(SceneGameList::scene());
 

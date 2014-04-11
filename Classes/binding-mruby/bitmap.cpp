@@ -695,7 +695,7 @@ IntRect Bitmap::textSize(const char *str)
 	int w = 0;
 	int h = 0;
 	
-	string path = SceneMain::workPath + "fonts/arial.ttf";
+	string path = "fonts/arial.ttf";
 
 	unsigned long s=0;
 	unsigned char* fpbuf = CCFileUtils::sharedFileUtils()->getFileData(path.c_str(),"rb",&s);

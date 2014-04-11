@@ -17,6 +17,7 @@
 #include "SceneMain.h"
 #include "StateLoading.h"
 #include "AndroidInterface.h"
+#include "LanguageText.h"
 
 CCScene* SceneGameList::scene()
 {
@@ -46,9 +47,6 @@ bool SceneGameList::init()
 	scrollView->setSize(getContentSize());
 	scrollView->setInnerContainerSize(scrollView->getRect().size);
 	m_pUiLayer->addWidget(scrollView);
-
-
-	
 
 #ifdef WIN32
 	WIN32_FIND_DATA FindFileData;
@@ -115,9 +113,9 @@ bool SceneGameList::init()
 	DIR* dp = NULL;
 	struct dirent *dmsg;
 	int i=0;
-	if ((dp = opendir(path)) != NULL)
+	dp = opendir(path);
+	if (dp != NULL)
 	{
-		int i=0;
 		while ((dmsg = readdir(dp)) != NULL)
 		{
 
@@ -154,8 +152,21 @@ bool SceneGameList::init()
 				i++;
 			}
 		}
+		closedir(dp);
 	}
-	closedir(dp);
+	
+	if (dp==NULL || i==0)
+	{
+		map<string,string>& languagemap = LanguageText::getInstance()->getStringMap();
+		string nogametext = languagemap["no_game"];
+		CCLabelTTF* nogamelabel = CCLabelTTF::create(nogametext.c_str(),"Arial",24);
+		addChild(nogamelabel);
+		nogamelabel->setAnchorPoint(ccp(0,1));
+		nogamelabel->setColor(ccc3(255,0,0));
+		nogamelabel->setPosition(ccp(0,getContentSize().height));
+		//CCLOG("nogame! %s",nogametext.c_str());
+	}
+	
 #endif
 
 

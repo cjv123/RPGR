@@ -54,7 +54,7 @@ public class RMRunner extends Cocos2dxActivity implements AdListener{
 	private static RMRunner mRPGActivity;
 	private static AdView mAdview;
 	private static RelativeLayout mRl;
-	private static String MY_AD_UNIT_ID = "a1534429a3b08c2";
+	private static String MY_AD_UNIT_ID = "a1534742c2828a7";
 	private static MyHandler mHandler;
 	
 	public static native void initJVM();
@@ -115,24 +115,10 @@ public class RMRunner extends Cocos2dxActivity implements AdListener{
     public static String getROMPath()
     {
     	String sdcardpath = Environment.getExternalStorageDirectory().getPath();
-    	File dir = new File(sdcardpath+"/RMRunnerGames");
-    	boolean ret = false;
-    	if(dir!=null)
-    	{
-    		if(!dir.exists())
-    		{
-    			ret =dir.mkdirs();
-	    		if(ret)
-	    		{
-	    			return dir.getPath();
-	    		}
-    		}
-    		
-    	}
-    	return dir.getPath();
+    	String rompath = sdcardpath+"/RMRunnerGames";
+    	return rompath;
     }
 
-	
 	
 	private class MyHandler extends Handler{              
 
