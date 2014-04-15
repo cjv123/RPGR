@@ -14,6 +14,10 @@ bool GamePad::init()
 	mUIWidget = GUIReader::shareReader()->widgetFromJsonFile("gamepad_ui_1.ExportJson");
 	mUILayer->addWidget(mUIWidget);
 	addChild(mUILayer);
+	CCSize sceneSize = getContentSize();
+	mUIWidget->setScale(min(sceneSize.width/mUIWidget->getContentSize().width,
+		sceneSize.height/mUIWidget->getContentSize().height));
+	
 
 	UIButton* upbutton = (UIButton*)mUIWidget->getChildByName("pad_button_up");
 	upbutton->setTag(Button_Up);

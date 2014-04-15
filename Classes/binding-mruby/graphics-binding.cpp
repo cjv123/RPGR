@@ -115,7 +115,7 @@ static int handler_method_graphicsTransition(int ptr1,void* ptr2)
 		if(g_fide_layer)
 			g_fide_layer->removeFromParentAndCleanup(true);
 
-		string path = ptr->filename + ".png";
+		string path = SceneMain::workPath+ptr->filename + ".png";
 		CCSprite* sp = CCSprite::create(path.c_str());
 		if (!sp)
 			return -1;
