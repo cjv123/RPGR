@@ -104,6 +104,8 @@ getMrbData(mrb_state *mrb)
 		#_Type, \
 		freeInstance<_Type> \
 	}
+	/*freeInstance<_Type> \*/
+	
 
 #define MRB_METHOD_PUB(name) \
 	mrb_value name(mrb_state *mrb, mrb_value self)
@@ -404,6 +406,15 @@ inline float rgss_y_to_cocos_y(int y,int h)
 
 MRB_METHOD_PUB(inspectObject);
 
+inline int my_abs(int v)
+{
+	int a = v;
+	if (a<0)
+	{
+		a = -a;
+	}
+	return a;
+}
 
 #endif // BINDINGUTIL_H
 

@@ -161,6 +161,15 @@ struct TilemapPrivate
 
 	/* Change watches */
 
+
+	CCSpriteBatchNode* m_batchNode;
+	bool m_isupdate;
+	Vec2i m_screenoxy;
+
+
+	vector<Tilemap::Tile*> m_tiles;
+	vector<Tilemap::Tile*> m_screenTiles;
+
 	TilemapPrivate(Viewport *viewport)
 	    : viewport(viewport),
 	      tileset(0),
@@ -176,7 +185,9 @@ struct TilemapPrivate
 	      buffersDirty(false),
 	      zOrderDirty(false),
 	      flashDirty(false),
-	      tilemapReady(false)
+	      tilemapReady(false),
+		  m_batchNode(NULL),
+		  m_isupdate(false)
 	{
 		memset(autotiles, 0, sizeof(autotiles));
 
@@ -230,12 +241,13 @@ Bitmap *Tilemap::Autotiles::get(int i) const
 	return p->autotiles[i];
 }
 
-Tilemap::Tilemap(Viewport *viewport) :m_clippingNode(0)
+Tilemap::Tilemap(Viewport *viewport) 
 {
 	if (viewport == 0)
 	{
 		viewport = new Viewport(0,0,0,0);
 	}
+
 	p = new TilemapPrivate(viewport);
 	p->autotilesProxy.p = p;
 	p->tilemap = this;
@@ -245,13 +257,19 @@ Tilemap::Tilemap(Viewport *viewport) :m_clippingNode(0)
 Tilemap::~Tilemap()
 {
 	dispose();
-
-	delete p;
 }
 
 void Tilemap::update()
 {
-	
+	if (p->m_isupdate)
+	{
+		pthread_mutex_lock(&s_thread_handler_mutex);
+		p->m_isupdate = false;
+		ThreadHandler hander={handler_method_update,(int)this,NULL};
+		ThreadHandlerMananger::getInstance()->pushHandler(hander,this);
+		pthread_mutex_unlock(&s_thread_handler_mutex);
+	}
+		
 }
 
 Tilemap::Autotiles &Tilemap::getAutotiles() const 
@@ -316,30 +334,11 @@ int Tilemap::handler_method_setox( int ptr1,void* ptr2 )
 {
 	Tilemap* tilemap = (Tilemap*)ptr1;
 	Vec2i* pos = (Vec2i*)ptr2;
-	CCClippingNode* clipper = tilemap->p->viewport->getClippingNode();
-	int clipperH = clipper->getContentSize().height;
 
-	Viewport* viewport = tilemap->p->viewport;
-	CCRect screenrect = CCRectMake(viewport->getRect()->x,
-		rgss_y_to_cocos_y(viewport->getRect()->y,viewport->getRect()->height) - viewport->getRect()->height,
-		viewport->getRect()->width,
-		viewport->getRect()->height
-		);
+	tilemap->p->m_isupdate = true;
 
-	for (int i=0;i<tilemap->m_tiles.size();i++)
-	{
-		Tile tile = tilemap->m_tiles[i];
-		CCSprite* tilesp = tile.sp;
-		tilesp->setPositionX(tile.pos.x-pos->x);
 
-		if (!screenrect.intersectsRect(tilesp->boundingBox()))
-			tilesp->setVisible(false);
-		else
-		{
-			tilesp->setVisible(true);
-			tilemap->orderTileZ(tilesp,tile.x,tile.y,tile.z);
-		}
-	}
+
 	delete pos;
 	return 0;
 }
@@ -347,32 +346,11 @@ int Tilemap::handler_method_setox( int ptr1,void* ptr2 )
 int Tilemap::handler_method_setoy( int ptr1,void* ptr2 )
 {
 	Tilemap* tilemap = (Tilemap*)ptr1;
-
-	Viewport* viewport = tilemap->p->viewport;
-	CCRect screenrect = CCRectMake(viewport->getRect()->x,
-		rgss_y_to_cocos_y(viewport->getRect()->y,viewport->getRect()->height) - viewport->getRect()->height,
-		viewport->getRect()->width,
-		viewport->getRect()->height
-		);
-
 	Vec2i* pos = (Vec2i*)ptr2;
-	CCClippingNode* clipper = tilemap->p->viewport->getClippingNode();
-	int clipperH = clipper->getContentSize().height;
-	for (int i=0;i<tilemap->m_tiles.size();i++)
-	{
-		Tile tile = tilemap->m_tiles[i];
-		CCSprite* tilesp = tile.sp;
-		tilesp->setPositionY( rgss_y_to_cocos_y(tile.pos.y-pos->y,clipperH));
-		
 
-		if (!screenrect.intersectsRect(tilesp->boundingBox()))
-			tilesp->setVisible(false);
-		else
-		{
-			tilesp->setVisible(true);
-			tilemap->orderTileZ(tilesp,tile.x,tile.y,tile.z);
-		}
-	}
+	tilemap->p->m_isupdate = true;
+
+	
 	delete pos;
 	return 0;
 }
@@ -405,27 +383,43 @@ void Tilemap::setOY(int value)
 
 int Tilemap::handler_method_release( int ptr1,void* ptr2 )
 {
-	vector<CCSprite*>* sps= (vector<CCSprite*>*)ptr1;
+	vector<CCNode*>* sps= (vector<CCNode*>*)ptr1;
 
 	for (int i=0;i<sps->size();i++)
 	{
 		sps->at(i)->removeFromParentAndCleanup(true);
+		sps->at(i)->release();
 	}
 	delete sps;
+
+	CCSpriteBatchNode* spbn = (CCSpriteBatchNode*)ptr2;
+	spbn->removeFromParentAndCleanup(true);
+
 	return 0;
 }
 
 void Tilemap::releaseResources()
 {
-	vector<CCSprite*>* delsps = new vector<CCSprite*>;
-	for (int i=0;i<m_tiles.size();i++)
+	vector<CCNode*>* delsps = new vector<CCNode*>;
+	for (int i=0;i<p->m_tiles.size();i++)
 	{
-		delsps->push_back(m_tiles[i].sp);
+		Tile* tile = p->m_tiles[i];
+		for (int j=0;j<3;j++)
+		{
+			if(tile->sp[j])
+				delsps->push_back(tile->sp[j]);
+		}
+		delete tile;
 	}
+	p->m_tiles.clear();
+
 	pthread_mutex_lock(&s_thread_handler_mutex);
-	ThreadHandler hander={handler_method_release,(int)delsps,(void*)NULL};
+	ThreadHandler hander={handler_method_release,(int)delsps,(void*)p->m_batchNode};
 	ThreadHandlerMananger::getInstance()->pushHandlerRelease(hander);
 	pthread_mutex_unlock(&s_thread_handler_mutex);
+
+	if(p)
+		delete p;
 }
 
 
@@ -444,7 +438,7 @@ static FloatRect getAutotilePieceRect(int x, int y, /* in pixel coords */
 	return FloatRect(x, y, 16, 16);
 }
 
-void Tilemap::handleAutotile(Tilemap* tilemap,int x,int y,int z,int tileInd)
+void Tilemap::handleAutotile(Tilemap* tilemap,int x,int y,int z,int tileInd,Tile* tile)
 {
 	/* Which autotile [0-7] */
 	int atInd = tileInd / 48 - 1;
@@ -455,31 +449,31 @@ void Tilemap::handleAutotile(Tilemap* tilemap,int x,int y,int z,int tileInd)
 	if(NULL == autoTilsetSp)
 		return;
 
+	CCClippingNode* clipper = tilemap->p->viewport->getClippingNode();
+
+
 	Viewport* viewport = tilemap->p->viewport;
-	CCRect screenrect = CCRectMake(viewport->getRect()->x,
-		rgss_y_to_cocos_y(viewport->getRect()->y,viewport->getRect()->height) - viewport->getRect()->height,
-		viewport->getRect()->width,
-		viewport->getRect()->height
-		);
+
+	int prio = tilemap->p->samplePriority(tileInd);
 
 	const StaticRect *pieceRect = &autotileRects[subInd*4];
+	CCSpriteBatchNode* tileNode = CCSpriteBatchNode::createWithTexture(autoTilsetSp->getTexture());
+	tileNode->setContentSize(CCSizeMake(tileW,tileW));
+	
 	for (int i = 0; i < 4; ++i)
 	{
-		FloatRect posRect = getAutotilePieceRect(x*32, y*32, i);
+		FloatRect posRect = getAutotilePieceRect(0, 0, i);
 		FloatRect texRect = pieceRect[i];
 
 		/* Adjust to atlas coordinates */
 		//texRect.y += atInd * autotileH;
 		texRect.x -=0.5;texRect.y-=0.5;texRect.w+=1;texRect.h+=1;
 
-		CCClippingNode* clipper = tilemap->p->viewport->getClippingNode();
-
 		CCSprite* tilesp = CCSprite::createWithTexture(autoTilsetSp->getTexture(),CCRectMake(texRect.x,texRect.y,texRect.w,texRect.h));
-		clipper->addChild(tilesp);
 		tilesp->setAnchorPoint(ccp(0,1));
-		tilesp->setPosition(ccp(posRect.x,rgss_y_to_cocos_y(posRect.y,clipper->getContentSize().height)));
-		Tile tile = {Vec2i(posRect.x,posRect.y),tilesp,x,y,z};
-		tilemap->m_tiles.push_back(tile);
+		tilesp->setPosition(ccp(posRect.x,rgss_y_to_cocos_y(posRect.y,tileW)));
+
+		tileNode->addChild(tilesp);
 
 		/*is a animte tile*/
 		if (autoTilsetSp->getContentSize().width>autotileW)
@@ -495,16 +489,13 @@ void Tilemap::handleAutotile(Tilemap* tilemap,int x,int y,int z,int tileInd)
 			tilesp->runAction(CCRepeatForever::create(animate));
 		}
 		
-
-		CCRect sprect = tilesp->boundingBox();
-		if (!screenrect.intersectsRect(sprect))
-		{
-			tilesp->setVisible(false);
-		}
-		else
-			tilemap->orderTileZ(tilesp,x,y,z);
+		tilemap->orderTileZ(tilesp,x,y,z);
 	}
 	
+	tileNode->retain();
+	tileNode->setAnchorPoint(ccp(0,1));
+	tile->sp[z]=tileNode;
+
 }
 
 
@@ -523,61 +514,70 @@ int Tilemap::handler_method_drawMap( int ptr1,void* ptr2 )
 	if (!clipper)
 		return -1;
 
-	CCRect screenrect = CCRectMake(viewport->getRect()->x,
-		rgss_y_to_cocos_y(viewport->getRect()->y,viewport->getRect()->height) - viewport->getRect()->height,
-		viewport->getRect()->width,
-		viewport->getRect()->height
-		);
-
+	if (tilemap->p->m_batchNode == NULL)
+	{
+		tilemap->p->m_batchNode = CCSpriteBatchNode::createWithTexture(tilesetSp->getTexture());
+		clipper->addChild(tilemap->p->m_batchNode);
+	}
+	
 	for (int x = 0; x < mapWidth; ++x)
 	{	
 		for (int y = 0; y < mapHeight; ++y)
 		{		
+			Tile* tile = new Tile;
+			tilemap->p->m_tiles.push_back(tile);
+			tile->pos = Vec2i(x*tileW,y*tileW);
+			tile->sp[0]=NULL;tile->sp[1]=NULL;tile->sp[2]=NULL;
+			tile->x = x;tile->y=y;
 			for (int z = 0; z < mapDepth; ++z)
 			{
-				int tileInd = mapData->at(x, y, z);
-
-				/* Check for empty space */
-				if (tileInd < 48)
-					continue;
-
-				int prio = tilemap->p->samplePriority(tileInd);
-
-				/* Check for faulty data */
-				if (prio == -1)
-					continue;
-
-				/* Check for autotile */
-				if (tileInd < 48*8)
-				{
-					handleAutotile(tilemap,x,y,z,tileInd);
-					continue;
-				}
-
-				int tsInd = tileInd - 48*8;
-				int tileX = tsInd % 8;
-				int tileY = tsInd / 8;
-
-				CCSprite* tilesp = CCSprite::createWithTexture(tilesetSp->getTexture(),CCRectMake(tileX*tileW,tileY*tileW,tileW,tileW));
-				clipper->addChild(tilesp);
-				tilesp->setAnchorPoint(ccp(0,1));
-				tilesp->setPosition(ccp(x*tileW,rgss_y_to_cocos_y(y*tileW,clipper->getContentSize().height)));
-				Tile tile = {Vec2i(x*tileW,y*tileW),tilesp,x,y,z};
-				tilemap->m_tiles.push_back(tile);
-			
-				if (!screenrect.intersectsRect(tilesp->boundingBox()))
-				{
-					tilesp->setVisible(false);
-				}
-				else
-					tilemap->orderTileZ(tilesp,x,y,z);
-				
+				drawTile(tilemap, x,y,z,tile);
 			}
 		}
 	}
-	
-
+	handler_method_drawToScreen(ptr1,ptr2);
 	return 0;
+}
+
+void Tilemap::drawTile(Tilemap* tilemap, int x,int y,int z,Tile* tile)
+{
+	Viewport* viewport = tilemap->p->viewport;
+	CCClippingNode* clipper = viewport->getClippingNode();
+	Table* mapData = tilemap->p->mapData;
+
+	int tileInd = mapData->at(x, y, z);
+	CCSprite* tilesetSp = tilemap->p->tileset->getEmuBitmap();
+
+	/* Check for empty space */
+	if (tileInd < 48)
+	{
+		return;
+	}
+
+	int prio = tilemap->p->samplePriority(tileInd);
+
+	/* Check for faulty data */
+	if (prio == -1)
+	{
+		return;
+	}
+
+	/* Check for autotile */
+	if (tileInd < 48*8)
+	{
+		handleAutotile(tilemap,x,y,z,tileInd,tile);
+		return;
+	}
+
+	int tsInd = tileInd - 48*8;
+	int tileX = tsInd % 8;
+	int tileY = tsInd / 8;
+
+	CCSprite* tilesp = CCSprite::createWithTexture(tilesetSp->getTexture(),CCRectMake(tileX*tileW,tileY*tileW,tileW,tileW));
+	tilesp->retain();
+	tilesp->setAnchorPoint(ccp(0,1));
+
+	tile->sp[z] = tilesp;
 }
 
 
@@ -622,7 +622,7 @@ void Tilemap::composite()
 	pthread_mutex_unlock(&s_thread_handler_mutex);
 }
 
-void Tilemap::orderTileZ(CCSprite* tilesp,int x,int y,int z)
+void Tilemap::orderTileZ(CCNode* tilesp,int x,int y,int z)
 {
 	Table* mapData = p->mapData;
 	int mapWidth = p->mapWidth;
@@ -646,3 +646,109 @@ void Tilemap::orderTileZ(CCSprite* tilesp,int x,int y,int z)
 		zoder += 64 + (prio -1)*32;
 	tilesp->setZOrder(zoder);
 }
+
+int Tilemap::handler_method_update( int ptr1,void* ptr2 )
+{
+	Tilemap* tilemap = (Tilemap*)ptr1;
+	CCClippingNode* clipper = tilemap->p->viewport->getClippingNode();
+	Viewport* viewport = tilemap->p->viewport;
+
+	int clipperH = clipper->getContentSize().height;
+	int offy = my_abs(tilemap->p->m_screenoxy.y - tilemap->p->offset.y);
+	int offx = my_abs(tilemap->p->m_screenoxy.x - tilemap->p->offset.x);
+
+	if (offx>tileW || offy>tileW)
+	{
+		handler_method_drawToScreen(ptr1,ptr2);
+	}
+	else
+	{
+		for (int i=0;i<tilemap->p->m_screenTiles.size();i++)
+		{
+			Tile* tile = tilemap->p->m_screenTiles[i];
+			for (int j=0;j<3;j++)
+			{
+				CCNode* tilesp = tile->sp[j];
+				if (tilesp == NULL)
+					continue;
+				tilesp->setPositionX(tile->pos.x-tilemap->p->offset.x);
+				tilesp->setPositionY( rgss_y_to_cocos_y(tile->pos.y-tilemap->p->offset.y,clipperH));
+				tilemap->orderTileZ(tilesp,tile->x,tile->y,j);
+			}
+		}
+	}
+
+	return 0;
+}
+
+int Tilemap::handler_method_drawToScreen( int ptr1,void* ptr2 )
+{
+	Tilemap* tilemap = (Tilemap*)ptr1;
+	Table* mapData = tilemap->p->mapData;
+	int mapWidth = tilemap->p->mapWidth;
+	int mapHeight = tilemap->p->mapHeight;
+	int mapDepth = mapData->zSize();
+	
+	CCClippingNode* clipper = tilemap->p->viewport->getClippingNode();
+	Viewport* viewport = tilemap->p->viewport;
+
+	int clipperH = clipper->getContentSize().height;
+	
+	int col = tilemap->p->offset.x/tileW - 2;
+	int row = tilemap->p->offset.y/tileW -2;
+	if(col<0) col = 0;
+	if(row<0) row = 0;
+	int maxcol =col+ clipper->getContentSize().width/tileW + 4;
+	int maxrow =row + clipper->getContentSize().height/tileW + 4;
+	if(maxcol>mapData->xSize()) maxcol = mapData->xSize();
+	if(maxrow>mapData->ySize()) maxrow = mapData->ySize();
+
+	for (int i=0;i<tilemap->p->m_screenTiles.size();i++)
+	{
+		for (int j=0;j<3;j++)
+		{
+			if(tilemap->p->m_screenTiles[i]->sp[j])
+				tilemap->p->m_screenTiles[i]->sp[j]->removeFromParentAndCleanup(true);
+		}
+	}
+	tilemap->p->m_screenTiles.clear();
+
+	for (int x = col; x < maxcol; ++x)
+	{	
+		for (int y = row; y < maxrow; ++y)
+		{		
+			Tile* tile = tilemap->p->m_tiles[x*mapHeight+y];
+			for (int z = 0; z < mapDepth; ++z)
+			{
+				CCNode* tilenode = tile->sp[z];
+				if (tilenode)
+				{
+					tilenode->setPosition(ccp(tile->pos.x - tilemap->p->offset.x,rgss_y_to_cocos_y(tile->pos.y - tilemap->p->offset.y,clipper->getContentSize().height)));
+// 					if(tilenode->getChildrenCount()==0)
+// 					{
+// 						int tileInd = mapData->at(x, y, z);
+// 						int prio = tilemap->p->samplePriority(tileInd);
+// 						if (z==0 && prio<1)
+// 						{
+// 							tilemap->p->m_batchNode->addChild(tilenode);
+// 						}
+// 						else
+// 							clipper->addChild(tilenode);
+// 					}
+// 					else
+					clipper->addChild(tilenode);
+					tilemap->orderTileZ(tilenode,tile->x,tile->y,z);
+					tilemap->p->m_screenTiles.push_back(tile);
+				}
+				
+			}
+		}
+	}
+
+	tilemap->p->m_screenoxy.x = tilemap->p->offset.x;
+	tilemap->p->m_screenoxy.y = tilemap->p->offset.y;
+
+	return 0;
+}
+
+

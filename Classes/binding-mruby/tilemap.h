@@ -14,6 +14,7 @@ class Table;
 
 struct TilemapPrivate;
 
+
 class Tilemap : public Disposable
 {
 public:
@@ -45,25 +46,29 @@ public:
 	DECL_ATTR( OX,         int       )
 	DECL_ATTR( OY,         int       )
 
-private:
-	TilemapPrivate *p;
-	CCClippingNode* m_clippingNode;
-
 	struct Tile
 	{
 		Vec2i pos;
-		CCSprite* sp;
-		int x,y,z;
+		CCNode* sp[3];
+		int x,y;
 	};
-	vector<Tile> m_tiles;
 
+	
+private:
+
+
+	TilemapPrivate *p;
+
+	static void drawTile(Tilemap* tilemap,int x,int y,int z,Tile* tile);
 	static int handler_method_drawMap(int prt1,void* ptr2);
 	static int handler_method_setox(int ptr1,void* ptr2);
 	static int handler_method_setoy(int ptr1,void* ptr2);
-	static void handleAutotile(Tilemap* tilemap,int x,int y,int z,int tileInd);
+	static void handleAutotile(Tilemap* tilemap,int x,int y,int z,int tileInd,Tile* tile);
 	static int handler_method_composite( int ptr1,void* ptr2 );
 	static int handler_method_release(int ptr1,void* ptr2);
-	void orderTileZ(CCSprite* tilesp,int x,int y,int z);
+	static int handler_method_update(int ptr1,void* ptr2);
+	static int handler_method_drawToScreen(int ptr1,void* ptr2);
+	void orderTileZ(CCNode* tilesp,int x,int y,int z);
 
 	void drawMap();
 
